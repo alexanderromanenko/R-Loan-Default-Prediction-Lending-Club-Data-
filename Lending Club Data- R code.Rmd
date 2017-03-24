@@ -1,0 +1,170 @@
+---
+title: "Finance Assignment 1"
+author: "Alex Romanenko"
+date: "28/02/2017"
+output: html_document
+---
+
+Q1.FULL-MODE
+
+
+```{r}
+library(readxl)
+library(caret)
+library(boot)
+library('tree')
+library(class)
+library(glmnet)
+
+#loading the data
+set.seed(123)
+data <- read_excel("LCloanbook.xls", sheet = "Data")
+names(data)[1]<-paste("loan_status")
+
+#normalizing the data
+data_z <- as.data.frame(scale(data))
+
+```
+
+
+Logistic Regression
+```{r}
+#running the logistic regression
+lg.model <- glm(loan_status ~ ., data = data_z)
+summary(lg.model)
+
+#10-Fold Cross Validation
+cv_glm <- cv.glm(data_z, glmfit = lg.model, K = 10)
+cv_glm
+
+1 - cv_glm$delta[1] 
+# accuracy: 0.852417
+```
+
+Tree
+```{r}
+# building the classifiction tree
+tree <- tree(as.factor(loan_status) ~ ., data = data)
+summary(tree)
+
+#10-Fold Cross Validation
+cv_tree <- cv.tree(tree, FUN = prune.misclass, K = 10)
+best_size <- cv_tree$size[which(cv_tree$dev==min(cv_tree$dev))]  # best size 
+
+# prune the full tree to the best size
+cv_tree_pruned <- prune.misclass(tree, best=best_size)  
+summary(cv_tree_pruned)
+
+# accuacy of tree classifier
+tree_misclass <- summary(cv_tree_pruned)$misclass
+acc_tree <- (tree_misclass[2] - tree_misclass[1]) / tree_misclass[2]  
+acc_tree
+
+#accuracy: 0.7777907
+```
+
+1NN
+```{r}
+
+# 1NN cross-validation
+flds <- createFolds(1:nrow(data_z), k = 10, list = TRUE, returnTrain = FALSE)
+accuracy_knn <- list()
+
+
+for (i in 1:10) {
+  knn_cv <- knn(train = data_z[-c(flds[[i]]), -1], test = data_z[flds[[i]], -1], 
+                cl = factor(data_z$loan_status[-c(flds[[i]])]), k = 1) 
+  con_matrix <- as.matrix(confusionMatrix(factor(data_z$loan_status[(flds[[i]])]), knn_cv))
+  accuracy_knn[i] <- sum(con_matrix[1], con_matrix[4])/ sum(con_matrix)
+}
+
+mean(unlist(accuracy_knn))
+
+# accuracy: 0.625327  
+```
+
+```{r}
+# reduced model
+data.reduced <- data_z[, c(1, 2, 6, 8, 9, 10, 11, 13, 15,  37, 40)]
+
+# Loan amount, interest rate, employment length, annual income, dti, delinquencies in past 2 years, inqueries in the last 6 months, months since last delinquency, number of accounts now delinquent, open credit lines in the last 6 months
+
+#logistic regression reduced
+lg.model.reduced <- glm(loan_status ~ ., data = data.reduced)
+summary(lg.model.reduced)
+cv_glm.reduced <- cv.glm(data.reduced, glmfit = lg.model.reduced, K = 10)
+cv_glm.reduced
+
+1 - cv_glm.reduced$delta[1] 
+# accuracy: 0.7806877
+
+# tree reduced
+tree.reduced <- tree(as.factor(loan_status) ~ ., data = data.reduced)
+summary(tree.reduced)
+cv_tree.reduced <- cv.tree(tree.reduced, FUN = prune.misclass, K = 10)
+best_size.reduced <- cv_tree.reduced$size[which(cv_tree.reduced$dev==min(cv_tree.reduced$dev))]  # best size 
+
+cv_tree_pruned.reduced <- prune.misclass(tree.reduced, best=best_size.reduced)  
+summary(cv_tree_pruned.reduced)
+
+tree_misclass.reduced <- summary(cv_tree_pruned.reduced)$misclass
+acc_tree.reduced <- (tree_misclass.reduced[2] - tree_misclass.reduced[1]) / tree_misclass.reduced[2]
+
+#accuracy: 0.64170589
+
+#knn reduced
+accuracy_knn.reduced <- list()
+
+for (i in 1:10) {
+  knn_cv.reduced <- knn(train = data.reduced[-c(flds[[i]]), -1], test = data.reduced[flds[[i]], -1], 
+                        cl = factor(data.reduced$loan_status[-c(flds[[i]])]), k = 1) 
+  con_matrix.reduced <- as.matrix(confusionMatrix(factor(data.reduced$loan_status[(flds[[i]])]), knn_cv.reduced))
+  accuracy_knn.reduced[i] <- sum(con_matrix.reduced[1], con_matrix.reduced[4])/ sum(con_matrix.reduced)
+}
+
+mean(unlist(accuracy_knn.reduced))
+#accuracy: 0.6596539
+```
+
+
+
+
+LASSO for logistic regression inside CV
+```{r}
+
+cv.glm.lasso <- cv.glmnet(x = as.matrix(data_z[-1]), y = factor(data_z$loan_status), 
+                          alpha = 1, dfmax = 10, type.measure = "class", family = "binomial")
+
+
+1 - cv.glm.lasso$cvm[34]
+#0.8201909
+
+```
+
+
+```{r}
+lasso.model <- glmnet(x = as.matrix(data_z[-1]), y = factor(data_z$loan_status), 
+                      alpha = 1, dfmax = 10, family = "binomial")
+
+coefficients.lasso <- which(coef(lasso.model)[, 34] != 0)
+
+# loan_amntm int_rate, installment, annual_inc, dti, inq_last_6mths, out_prncp, total_rec_prncp, issue_year, GRADE_A
+```
+
+
+```{r}
+
+#Finding the best LASSO model
+cv.glm.lasso.full <- cv.glmnet(x = as.matrix(data_z[-1]), y = factor(data_z$loan_status), alpha = 1, type.measure = "class", family = "binomial")
+
+plot(cv.glm.lasso.full)
+
+1 - cv.glm.lasso.full$cvm[47]
+#accuracy: 0.8232313
+
+lasso.model2 <- glmnet(x = as.matrix(data_z[-1]), y = factor(data_z$loan_status), alpha = 1, family = "binomial")
+
+
+which(coef(lasso.model2)[, 47] != 0)
+```
+
