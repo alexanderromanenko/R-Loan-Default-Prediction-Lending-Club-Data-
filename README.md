@@ -6,4 +6,8 @@ This repository focuses on various machine learning techniques in order to accur
 3) LASSO-reduced model
 4) Tree classifier
 
-The work has been conducted as part of a 'Big Data in Finance' course on MSc Business Analytics (Imperial College London). The work has been submitted on 08/03/2017.
+There are 2 files:
+- R code for the assignment
+- Assignment Instructions + answers/discussion of findings
+
+The work has been conducted as part of a 'Big Data in Finance' course on MSc Business Analytics (Imperial College London).The work has been submitted on 08/03/2017.
